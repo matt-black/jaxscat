@@ -16,7 +16,7 @@ classifiers = [
 Changelog = "https://github.com/matt-black/jaxscat/releases"
 
 [tool.poetry.dependencies]
-python = ">=3.10,<4.0"
+python = ">=3.12,<4.0"
 numpy = ">=1.24.0"
 
 [tool.poetry.dev-dependencies]
