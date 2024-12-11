@@ -1,6 +1,6 @@
 # Reference
 
-## chemoecology_tools
+## jaxscat
 
 ```{eval-rst}
 .. automodule:: jaxscat
