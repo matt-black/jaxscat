@@ -18,7 +18,6 @@ usage
 reference
 notebooks/example.ipynb
 contributing
-Code of Conduct <codeofconduct>
 License <license>
 Changelog <https://github.com/matt-black/jaxscat/releases>
 ```
