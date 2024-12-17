@@ -165,3 +165,7 @@ cython_debug/
 
 data/raw/
 .DS_Store
+
+nb/test/
+nb/*.sh
+nb/*.out

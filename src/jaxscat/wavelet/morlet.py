@@ -1,6 +1,8 @@
 """ Morlet wavelets.
 
-Morlet filters are Gabor filters modified such that they can function as bandpass filters.
+Morlet filters are Gabor filters with a pre-modulation offset. This offset
+subtracts a gaussian profile centered at the original -- cancelling out the
+zero-frequency component and making the Gabor a bandpass filter.
 """
 
 import math

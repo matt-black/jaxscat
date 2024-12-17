@@ -1,6 +1,7 @@
 """ Gabor wavelets.
 
-Gabor wavelets are complex exponentials localized in space by a Gaussian.
+Gabor wavelets are fourier modes modulated by a gaussian envelope.
+The gaussian envelope localizes the fourier mode in space.
 """
 
 import math
