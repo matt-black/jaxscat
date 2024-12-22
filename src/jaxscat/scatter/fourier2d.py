@@ -1,10 +1,12 @@
 """ Fourier-space 2D Scattering Transform.
 
-Scattering transform for 2
+Scattering transform for 2 dimensions, where all calculations are done in
+the Fourier domain.
 """
 
 import math
 from functools import partial
+from typing import List
 from typing import Tuple
 
 import jax.numpy as jnp
@@ -15,29 +17,125 @@ from jaxtyping import Complex
 from jaxtyping import Real
 
 
-def scattering_coeffs(
+def scattering_fields(
     x: Complex[Array, "b c h w"],
+    adicity: int,
+    n_scales: int,
+    psi1: Complex[Array, "{n_scales} l h w"],
+    psi2: Complex[Array, "{n_scales} l h w"] | None = None,
+) -> Tuple[List[Complex[Array, "..."]], List[List[Complex[Array, "..."]]]]:
+    """scattering_fields Compute scattering fields.
+
+    Args:
+        x (Complex[Array]): input array, should be 4D (BCHW)
+        adicity (int): adicity of scale separation
+        n_scales (int): number of scales to compute fields over
+        psi1 (Complex[Array]): wavelet filter bank for first layer
+        psi2 (Complex[Array], optional): wavelet filter bank for second layer
+
+    Raises:
+        ValueError: if image width or height isn't evenly divisible by adicity^(n_scales)
+
+    Returns:
+        List[Cmplex[Array]]
+    """
+    if x.shape[-1] % adicity**n_scales:
+        raise ValueError(
+            "image width must be evenly divisible by adicity^(# scales)"
+        )
+    if x.shape[-2] % adicity**n_scales:
+        raise ValueError(
+            "image height must be evenly divisible by adicity^(# scales)"
+        )
+    psi2 = psi1 if psi2 is None else psi2
+    # each field has shape BCLHW
+    # will need to concat BCLMHW, so transform BCL1HW
+    field1 = [
+        complex_modulus(
+            subsample_field(x, adicity, j)[:, :, None, ...]
+            * periodize_filter(psi1[j, ...], adicity, j)[None, None, ...]
+        )
+        for j in range(n_scales)
+    ]
+    field2 = []
+    for j1, x1 in enumerate(field1[:-1]):
+        # NOTE: we need to periodize the filter to a total scale of j1+j2
+        # so that it matches in shape w. the field being (re-)subsampled
+        # multiplication here is done between all pairs of angles l, m
+        # psi2 has shape : JMHW -> MHW -> 111MHW
+        # output has shape : BCLMHW
+        j2s = list(range(j1 + 1, n_scales))
+        x2l = [
+            complex_modulus(
+                subsample_field(x1, adicity, j2)[:, :, :, None, ...]
+                * periodize_filter(psi2[j2, ...], adicity, j1 + j2)[
+                    None, None, None, ...
+                ]
+            )
+            for j2 in j2s
+        ]
+        field2.append(x2l)
+    field1 = [f[:, :, :, None, ...] for f in field1]
+    return field1, field2
+
+
+def group_fields_by_size(
+    field1: List[Complex[Array, "..."]],
+    field2: List[List[Complex[Array, "..."]]],
+) -> List[Complex[Array, "..."]]:
+    """group_fields_by_size Group scattering fields from different layers by size.
+
+    Args:
+        field1 (List[Complex[Array]]): Scattering fields from 1st layer of transform.
+        field2 (List[List[Complex[Array]]]): Scattering fields from 2nd layer of transform.
+
+    Returns:
+        List[Complex[Array]]: list of 6D arrays (BCLMHW) where elements correspond to the same spatial size, sorted in descending order.
+    """
+    shapes = list(map(lambda f: f.shape[-1], field1))
+    idxs = [list() for _ in range(len(field2))]
+    for j1 in range(len(field2)):
+        for j2 in range(len(field2[j1])):
+            shape = field2[j1][j2].shape[-1]
+            idx = jnp.argwhere(jnp.asarray(shapes == shape))
+            if len(idx):
+                idxs[j1].append(int(idx[0][0]))
+            else:
+                idxs[j1].append(-1)
+    for f2i, idxl in enumerate(idxs):
+        for f2i2, idx in enumerate(idxl):
+            if idx > 0:
+                field1[idx] = jnp.concatenate(
+                    [field1[idx][:, :, :, None, ...], field2[f2i][f2i2]], axis=3
+                )
+    return field1
+
+
+def scattering_coeffs(
+    x: Real[Array, "b c h w"],
     adicity: int,
     n_scales: int,
     phi: Complex[Array, "h w"],
     psi1: Complex[Array, "{n_scales} l h w"],
     psi2: Complex[Array, "{n_scales} l h w"] | None = None,
     strategy: str = "breadth",
+    reduction: str = "local",
 ) -> Tuple[
-    Complex[Array, "b c"],
-    Complex[Array, "b c j l"],
-    Complex[Array, "b c j l l"],
+    Real[Array, "b c"],
+    Real[Array, "b c j l"],
+    Real[Array, "b c j l l"],
 ]:
     """scattering_coeffs Compute scattering coefficients for input field, `x`.
 
     Args:
-        x (Complex[Array, "batch channel height width"]): 4D input tensor. Coefficients are computed on last 2 dimensions.
+        x (Complex[Array, "batch channel height width"]): 4D input tensor. Coefficients are computed on last 2 dimensions. Should be Fourier domain.
         adicity (int): logarithm-base used for scale separation.
         n_scales (int): number of scales to compute the scattering over
         phi (Complex[Array, "h w"]): low pass output filter.
         psi1 (Complex[Array, "{n_scales} l h w"]): wavelet filters for first scattering field.
         psi2 (Complex[Array, "{n_scales} l h w"], optional): wavelet filters for 2nd scattering. Defaults to None (psi1 is re-used).
         strategy (str, optional): whether computation is done breadth- or depth-first down the scattering tree. Defaults to "breadth".
+        reduction (str, optional): how to reduce the fields to scattering coefficients. Either "local" or "global". Defaults to "local".
 
     Raises:
         ValueError: if specified computation strategy isn't "breadth" or "depth"
@@ -50,6 +148,10 @@ def scattering_coeffs(
         raise ValueError(
             'invalid computation strategy (`strategy`), must be "breadth" or "depth"'
         )
+    if reduction not in ("global", "local"):
+        raise ValueError(
+            'invalid reduction strategy (`reduction`) must be "global" or "local"'
+        )
     if x.shape[-1] % adicity**n_scales:
         raise ValueError(
             "image width must be evenly divisible by adicity^(# scales)"
@@ -58,17 +160,42 @@ def scattering_coeffs(
         raise ValueError(
             "image height must be evenly divisible by adicity^(# scales)"
         )
-    max_scale = math.floor(math.log(min(x.shape[-2], x.shape[-1]), adicity))
     psi2 = psi1 if psi2 is None else psi2
 
     def scatter_coeff(z: Complex[Array, "..."]) -> Real[Array, "..."]:
         j = int(math.log(phi.shape[-1] / z.shape[-1], adicity))
-        rest = max_scale - j
-        return subsample_field(
-            z * periodize_filter(phi, adicity, j)[None, None, ...],
-            adicity,
-            rest,
-        ).squeeze(axis=(-2, -1))
+        rest = n_scales - j
+        if rest > 0:
+            out = jnp.real(
+                jnp.fft.ifft2(
+                    subsample_field(
+                        z * periodize_filter(phi, adicity, j)[None, None, ...],
+                        adicity,
+                        rest,
+                    )
+                )
+            )
+        else:
+            out = jnp.real(
+                jnp.fft.ifft2(
+                    z * periodize_filter(phi, adicity, j)[None, None, ...]
+                )
+            )
+        # if the inputs were padded, they won't be evenly divisible by (2**n_scales-1)
+        # if padded, need to crop out 2 pixels/dim, one on each "side" of dimension
+        if out.shape[-2] == x.shape[-2] // adicity ** (n_scales - 1):
+            slc_h = slice(None)
+        else:
+            slc_h = slice(1, -1)
+        if out.shape[-1] == x.shape[-1] // adicity ** (n_scales - 1):
+            slc_w = slice(None)
+        else:
+            slc_w = slice(1, -1)
+        # local reduction just returns the local scattering coeffs,
+        if reduction == "local":
+            return out[..., slc_h, slc_w]
+        else:
+            return jnp.mean(out[..., slc_h, slc_w], axis=(-2, -1))
 
     # first (zero-order) scattering coeff. is just low-pass'd input
     s0 = scatter_coeff(x)
@@ -85,7 +212,6 @@ def scattering_coeffs(
             for j in range(n_scales)
         ]
         s1 = jnp.stack(list(map(scatter_coeff, x1l)), axis=2)
-
         # repeat process for 2nd layer by scattering the first scattering field
         s2 = []
         for j1, x1 in enumerate(x1l):
@@ -147,7 +273,7 @@ def complex_modulus(x: Complex[Array, "..."]) -> Real[Array, "..."]:
     Returns:
         Real[Array]
     """
-    return jnp.fft.rfft2(jnp.abs(jnp.fft.irfft2(x)))
+    return jnp.fft.fft2(jnp.abs(jnp.fft.ifft2(x)))
 
 
 def subsample_field(

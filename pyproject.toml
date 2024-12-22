@@ -21,7 +21,10 @@ numpy = ">=1.24.0"
 jax = {extras = ["cuda12"], version = "^0.4.37"}
 jaxtyping = "^0.2.36"
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.test.dependencies]
+pytest = "^8.3.4"
+
+[tool.poetry.group.dev.dependencies]
 Pygments = ">=2.10.0"
 black = ">=21.10b0"
 coverage = {extras = ["toml"], version = ">=6.2"}
@@ -48,14 +51,9 @@ myst-parser = {version = ">=0.16.1"}
 ipykernel = "^6.29.5"
 poetry-plugin-export = "^1.8.0"
 myst-nb = "^1.1.2"
-
-[tool.poetry.group.test.dependencies]
-pytest = "^8.3.4"
-
-
-[tool.poetry.group.dev.dependencies]
 jupyterlab = "^4.3.3"
 ipympl = "^0.9.4"
+kymatio = "^0.3.0"
 
 [tool.coverage.paths]
 source = ["src", "*/site-packages"]

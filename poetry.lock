@@ -33,6 +33,17 @@ test = ["anyio[trio]", "coverage[toml] (>=7)", "exceptiongroup (>=1.2.0)", "hypo
 trio = ["trio (>=0.26.1)"]
 
 [[package]]
+name = "appdirs"
+version = "1.4.4"
+description = "A small Python module for determining appropriate platform-specific dirs, e.g. a \"user data dir\"."
+optional = false
+python-versions = "*"
+files = [
+    {file = "appdirs-1.4.4-py2.py3-none-any.whl", hash = "sha256:a841dacd6b99318a741b166adb07e19ee71a274450e68237b4650ca1055ab128"},
+    {file = "appdirs-1.4.4.tar.gz", hash = "sha256:7d5d0167b2b1ba821647616af46a749d1c653740dd0d2415100fe26e27afdf41"},
+]
+
+[[package]]
 name = "appnope"
 version = "0.1.4"
 description = "Disable App Nap on macOS >= 10.9"
@@ -599,6 +610,21 @@ traitlets = ">=4"
 
 [package.extras]
 test = ["pytest"]
+
+[[package]]
+name = "configparser"
+version = "7.1.0"
+description = "Updated configparser from stdlib for earlier Pythons."
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "configparser-7.1.0-py3-none-any.whl", hash = "sha256:98e374573c4e10e92399651e3ba1c47a438526d633c44ee96143dec26dad4299"},
+    {file = "configparser-7.1.0.tar.gz", hash = "sha256:eb82646c892dbdf773dae19c633044d163c3129971ae09b49410a303b8e0a5f7"},
+]
+
+[package.extras]
+doc = ["furo", "jaraco.packaging (>=9.3)", "jaraco.tidelift (>=1.4)", "rst.linker (>=1.9)", "sphinx (>=3.5)", "sphinx-lint"]
+test = ["pytest (>=6,!=8.1.*)", "pytest-checkdocs (>=2.4)", "pytest-cov", "pytest-enabler (>=2.2)", "pytest-mypy", "pytest-ruff (>=0.2.1)", "types-backports"]
 
 [[package]]
 name = "contourpy"
@@ -2250,6 +2276,23 @@ files = [
     {file = "kiwisolver-1.4.7-pp39-pypy39_pp73-win_amd64.whl", hash = "sha256:0c6c43471bc764fad4bc99c5c2d6d16a676b1abf844ca7c8702bdae92df01ee0"},
     {file = "kiwisolver-1.4.7.tar.gz", hash = "sha256:9893ff81bd7107f7b685d3017cc6583daadb4fc26e4a888350df530e41980a60"},
 ]
+
+[[package]]
+name = "kymatio"
+version = "0.3.0"
+description = "Wavelet scattering transforms in Python with GPU acceleration"
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "kymatio-0.3.0-py3-none-any.whl", hash = "sha256:e517113bc98a52795144eb80549f0686ee8a57dbbd9839b935f10dbceba0ec6b"},
+]
+
+[package.dependencies]
+appdirs = "*"
+configparser = "*"
+numpy = "*"
+packaging = "*"
+scipy = "*"
 
 [[package]]
 name = "markdown-it-py"
@@ -5290,4 +5333,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.12,<4.0"
-content-hash = "3550fc57171a490e3ae43a6e83d61fbb58cb81ad1abf44573819aa7d9766443b"
+content-hash = "69435184005810a4f5ba7ca0fe7fbc43dae5c4553ca921197afa14bab55e3752"
