@@ -19,7 +19,7 @@ from jaxtyping import Float
 from .._gauss import gaussian_2d
 from .._util import angular_coordinate_grid_2d
 from .._util import binomial_coefficient
-from .._util import centered_ifft2
+from .._util import ifft2_centered
 from .._util import radial_coordinate_grid_2d
 from .._util import shift_remainder
 
@@ -116,7 +116,7 @@ def filter_bank_2d_real(
     )
     return jnp.stack(
         [
-            centered_ifft2(wvlet[0, ...])
+            ifft2_centered(wvlet[0, ...])
             for wvlet in jnp.split(psi_hat, n_orientations, axis=0)
         ],
         axis=0,

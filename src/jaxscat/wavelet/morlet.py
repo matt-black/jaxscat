@@ -13,6 +13,7 @@ from jaxtyping import Complex
 from jaxtyping import Real
 
 from .gabor import gabor_kernel_2d_real
+from .gabor import gabor_kernel_2d_real_scikit
 
 
 def filter_bank_2d(
@@ -149,3 +150,51 @@ def morlet_kernel_2d_fourier(
             )
         )
     )
+
+
+def morlet_kernel_2d_real_scikit(
+    frequency: float,
+    theta: float = 0,
+    bandwidth: float = 1.0,
+    sigma_x: float | None = None,
+    sigma_y: float | None = None,
+    n_stds: float = 3,
+    offset: float = 0,
+    square: bool = False,
+    dtype=jnp.complex64,
+) -> Complex[Array, "h w"]:
+    """morlet_kernel_2d_real_scikit Real-space 2D Morlet kernel.
+
+    Args:
+        frequency (float): Spatial frequency of the harmonic function, in pixels.
+        theta (float, optional): Orientation in radians. Defaults to 0..
+        bandwidth (float, optional): Filter bandwidth, sets sigma_x,y. Defaults to 1..
+        sigma_x (float | None, optional): Standard deviation in x-direction (pre-rotation). Defaults to None.
+        sigma_y (float | None, optional): Standard deviation in y-direction (pre-rotation). Defaults to None.
+        n_stds (float, optional): Size of the output kernel, in standard deviations. Defaults to 3.
+        offset (float, optional): Phase offset of the harmonic function. Defaults to 0.
+        square (bool, optional): Make the output kernel square. Defaults to False.
+        dtype (optional): Datatype of output kernel (single or double precision). Defaults to jnp.complex128.
+
+    Raises:
+        ValueError: If output dtype is not complex
+
+    Returns:
+        Complex[Array]
+    """
+    gab = gabor_kernel_2d_real_scikit(
+        frequency,
+        theta,
+        bandwidth,
+        sigma_x,
+        sigma_y,
+        n_stds,
+        offset,
+        square,
+        dtype,
+    )
+    mod = gabor_kernel_2d_real_scikit(
+        0, theta, bandwidth, sigma_x, sigma_y, n_stds, offset, square, dtype
+    )
+    ratio = jnp.sum(gab) / jnp.sum(mod)
+    return gab - ratio * mod
