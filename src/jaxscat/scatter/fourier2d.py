@@ -46,7 +46,7 @@ def scattering_fields(
         n_scales (int): number of scales to compute fields over
         psi1 (Complex[Array]): wavelet filter bank for first layer
         psi2 (Complex[Array], optional): wavelet filter bank for second layer
-
+        nonlinearity (Callable[[Array],Array], optional): nonlinearity to use after each wavelet transform. Defaults to complex modulus.
     Raises:
         ValueError: if image width or height isn't evenly divisible by adicity^(n_scales)
 
@@ -115,7 +115,7 @@ def scattering_coeffs(
         psi2 (Complex[Array, "{n_scales} l h w"], optional): wavelet filters for 2nd scattering. Defaults to None (psi1 is re-used).
         strategy (str, optional): whether computation is done breadth- or depth-first down the scattering tree. Defaults to "breadth".
         reduction (str, optional): how to reduce the fields to scattering coefficients. Either "local" or "global". Defaults to "local".
-
+        nonlinearity (Callable[[Array],Array], optional): nonlinearity to use after each wavelet transform. Defaults to complex modulus.
     Raises:
         ValueError: if specified computation strategy isn't "breadth" or "depth"
         ValueError: if image width or height isn't evenly divisible by adicity^(n_scales)

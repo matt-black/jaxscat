@@ -6,6 +6,7 @@ zero-frequency component and making the Gabor a bandpass filter.
 """
 
 import math
+from typing import Tuple
 
 import jax.numpy as jnp
 from jaxtyping import Array
@@ -152,6 +153,87 @@ def morlet_kernel_2d_fourier(
     )
 
 
+def filter_bank_2d_scikit(
+    n_stds: float,
+    n_orientations: int,
+    scale: int = 0,
+    space: str = "real",
+    adicity: int = 2,
+    sigma_prefactor: float = 0.8,
+    freq_prefactor: float = 3 * math.pi / 4,
+    gamma_prefactor: float = 4.0,
+):
+    """filter_bank_2d_scikit Filter bank of 2D Morlet kernels, generated via the scikit API.
+
+    Args:
+        n_stds (float): size of output kernel, in standard deviations
+        n_orientations (int): # of orientations in filter bank
+        scale (int, optional): scale at which the filter bank will be generated. Defaults to 0.
+        space (str, optional): space of kernels ('real' or 'fourier'). Defaults to 'real'.
+        adicity (int, optional): adicity of scale separation being used. Defaults to 2.
+        sigma_prefactor (float, optional): sigma = (sigma_prefactor) * adicity**scale. Defaults to 0.8.
+        freq_prefactor (float, optional): freq = (freq_prefactor) / adicity**scale. Defaults to 3*math.pi/4.
+        gamma_prefactor (float, optional): gamma = gamma_prefactor / n_orientations. Defaults to 4.0.
+
+    Raises:
+        NotImplementedError: if `space=='fourier'`. only real-space kernels implemented.
+
+    Returns:
+        Complex[Array]: (# orientations) x (kernel_height) x (kernel_width)
+    """
+    if space == "fourier":
+        raise NotImplementedError(
+            "scikit-style filters only supported for real space"
+        )
+    freq = freq_prefactor / adicity**scale
+    thetas = [
+        math.floor(n_orientations - n_orientations / 2 - ell)
+        * math.pi
+        / n_orientations
+        for ell in range(n_orientations)
+    ]
+    sigma_x = sigma_prefactor * adicity**scale
+    sigma_y = sigma_x * gamma_prefactor / n_orientations
+    kshapes = [
+        _kernel_shape_for_sigmas(n_stds, sigma_x, sigma_y, theta)
+        for theta in thetas
+    ]
+    ksize_h = max([r for r, _ in kshapes])
+    ksize_w = max([c for _, c in kshapes])
+    return jnp.stack(
+        [
+            morlet_kernel_2d_real_scikit(
+                freq,
+                theta,
+                1.0,
+                sigma_x,
+                sigma_y,
+                n_stds,
+                0,
+                (ksize_h, ksize_w),
+            )
+            for theta in thetas
+        ],
+        axis=0,
+    )
+
+
+def _kernel_shape_for_sigmas(
+    n_stds: float, sigma_x: float, sigma_y: float, theta: float
+) -> Tuple[int, int]:
+    ct = math.cos(theta)
+    st = math.sin(theta)
+    x0 = math.ceil(
+        max(abs(n_stds * sigma_x * ct), abs(n_stds * sigma_y * st), 1)
+    )
+    size_x = len(list(range(-x0, x0 + 1)))
+    y0 = math.ceil(
+        max(abs(n_stds * sigma_y * ct), abs(n_stds * sigma_x * st), 1)
+    )
+    size_y = len(list(range(-y0, y0 + 1)))
+    return size_y, size_x
+
+
 def morlet_kernel_2d_real_scikit(
     frequency: float,
     theta: float = 0,
@@ -160,7 +242,7 @@ def morlet_kernel_2d_real_scikit(
     sigma_y: float | None = None,
     n_stds: float = 3,
     offset: float = 0,
-    square: bool = False,
+    shape: Tuple[int, int] | None = None,
     dtype=jnp.complex64,
 ) -> Complex[Array, "h w"]:
     """morlet_kernel_2d_real_scikit Real-space 2D Morlet kernel.
@@ -173,7 +255,7 @@ def morlet_kernel_2d_real_scikit(
         sigma_y (float | None, optional): Standard deviation in y-direction (pre-rotation). Defaults to None.
         n_stds (float, optional): Size of the output kernel, in standard deviations. Defaults to 3.
         offset (float, optional): Phase offset of the harmonic function. Defaults to 0.
-        square (bool, optional): Make the output kernel square. Defaults to False.
+        shape (Tuple[int,int], optional): Directly specify size of output kernel. Defaults to None.
         dtype (optional): Datatype of output kernel (single or double precision). Defaults to jnp.complex128.
 
     Raises:
@@ -190,11 +272,11 @@ def morlet_kernel_2d_real_scikit(
         sigma_y,
         n_stds,
         offset,
-        square,
+        shape,
         dtype,
     )
     mod = gabor_kernel_2d_real_scikit(
-        0, theta, bandwidth, sigma_x, sigma_y, n_stds, offset, square, dtype
+        0, theta, bandwidth, sigma_x, sigma_y, n_stds, offset, shape, dtype
     )
     ratio = jnp.sum(gab) / jnp.sum(mod)
     return gab - ratio * mod
