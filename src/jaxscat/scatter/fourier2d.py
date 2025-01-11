@@ -6,6 +6,7 @@ the Fourier domain.
 
 import math
 from functools import partial
+from typing import Callable
 from typing import List
 from typing import Tuple
 
@@ -17,12 +18,25 @@ from jaxtyping import Complex
 from jaxtyping import Real
 
 
+def complex_modulus(x: Complex[Array, "..."]) -> Complex[Array, "..."]:
+    """complex_modulus Compute modulus of scattering field.
+
+    Args:
+        x (Complex[Array]): input field.
+
+    Returns:
+        Real[Array]
+    """
+    return jnp.fft.fft2(jnp.abs(jnp.fft.ifft2(x)))
+
+
 def scattering_fields(
     x: Complex[Array, "b c h w"],
     adicity: int,
     n_scales: int,
     psi1: Complex[Array, "{n_scales} l h w"],
     psi2: Complex[Array, "{n_scales} l h w"] | None = None,
+    nonlinearity: Callable[[Array], Array] = complex_modulus,
 ) -> Tuple[List[Complex[Array, "..."]], List[List[Complex[Array, "..."]]]]:
     """scattering_fields Compute scattering fields.
 
@@ -37,7 +51,7 @@ def scattering_fields(
         ValueError: if image width or height isn't evenly divisible by adicity^(n_scales)
 
     Returns:
-        List[Cmplex[Array]]
+        Tuple[List[Complex[Array]],List[List[Complex[Array]]]]: tuple where first element is list of fields at first layer of transform, second is list of lists of fields at second layer of transform.
     """
     if x.shape[-1] % adicity**n_scales:
         raise ValueError(
@@ -51,7 +65,7 @@ def scattering_fields(
     # each field has shape BCLHW
     # will need to concat BCLMHW, so transform BCL1HW
     field1 = [
-        complex_modulus(
+        nonlinearity(
             subsample_field(x, adicity, j)[:, :, None, ...]
             * periodize_filter(psi1[j, ...], adicity, j)[None, None, ...]
         )
@@ -66,7 +80,7 @@ def scattering_fields(
         # output has shape : BCLMHW
         j2s = list(range(j1 + 1, n_scales))
         x2l = [
-            complex_modulus(
+            nonlinearity(
                 subsample_field(x1, adicity, j2)[:, :, :, None, ...]
                 * periodize_filter(psi2[j2, ...], adicity, j1 + j2)[
                     None, None, None, ...
@@ -79,38 +93,6 @@ def scattering_fields(
     return field1, field2
 
 
-def group_fields_by_size(
-    field1: List[Complex[Array, "..."]],
-    field2: List[List[Complex[Array, "..."]]],
-) -> List[Complex[Array, "..."]]:
-    """group_fields_by_size Group scattering fields from different layers by size.
-
-    Args:
-        field1 (List[Complex[Array]]): Scattering fields from 1st layer of transform.
-        field2 (List[List[Complex[Array]]]): Scattering fields from 2nd layer of transform.
-
-    Returns:
-        List[Complex[Array]]: list of 6D arrays (BCLMHW) where elements correspond to the same spatial size, sorted in descending order.
-    """
-    shapes = list(map(lambda f: f.shape[-1], field1))
-    idxs = [list() for _ in range(len(field2))]
-    for j1 in range(len(field2)):
-        for j2 in range(len(field2[j1])):
-            shape = field2[j1][j2].shape[-1]
-            idx = jnp.argwhere(jnp.asarray(shapes == shape))
-            if len(idx):
-                idxs[j1].append(int(idx[0][0]))
-            else:
-                idxs[j1].append(-1)
-    for f2i, idxl in enumerate(idxs):
-        for f2i2, idx in enumerate(idxl):
-            if idx > 0:
-                field1[idx] = jnp.concatenate(
-                    [field1[idx][:, :, :, None, ...], field2[f2i][f2i2]], axis=3
-                )
-    return field1
-
-
 def scattering_coeffs(
     x: Real[Array, "b c h w"],
     adicity: int,
@@ -120,11 +102,8 @@ def scattering_coeffs(
     psi2: Complex[Array, "{n_scales} l h w"] | None = None,
     strategy: str = "breadth",
     reduction: str = "local",
-) -> Tuple[
-    Real[Array, "b c"],
-    Real[Array, "b c j l"],
-    Real[Array, "b c j l l"],
-]:
+    nonlinearity: Callable[[Array], Array] = complex_modulus,
+) -> Tuple[Real[Array, "..."], Real[Array, "..."], Real[Array, "..."]]:
     """scattering_coeffs Compute scattering coefficients for input field, `x`.
 
     Args:
@@ -166,21 +145,17 @@ def scattering_coeffs(
         j = int(math.log(phi.shape[-1] / z.shape[-1], adicity))
         rest = n_scales - j
         if rest > 0:
-            out = jnp.real(
-                jnp.fft.ifft2(
-                    subsample_field(
-                        z * periodize_filter(phi, adicity, j)[None, None, ...],
-                        adicity,
-                        rest,
-                    )
+            out = jnp.fft.ifft2(
+                subsample_field(
+                    z * periodize_filter(phi, adicity, j)[None, None, ...],
+                    adicity,
+                    rest,
                 )
-            )
+            ).real
         else:
-            out = jnp.real(
-                jnp.fft.ifft2(
-                    z * periodize_filter(phi, adicity, j)[None, None, ...]
-                )
-            )
+            out = jnp.fft.ifft2(
+                z * periodize_filter(phi, adicity, j)[None, None, ...]
+            ).real
         # if the inputs were padded, they won't be evenly divisible by (2**n_scales-1)
         # if padded, need to crop out 2 pixels/dim, one on each "side" of dimension
         if out.shape[-2] == x.shape[-2] // adicity ** (n_scales - 1):
@@ -194,7 +169,7 @@ def scattering_coeffs(
         # local reduction just returns the local scattering coeffs,
         if reduction == "local":
             return out[..., slc_h, slc_w]
-        else:
+        else:  # global reduction takes mean over space dimensions
             return jnp.mean(out[..., slc_h, slc_w], axis=(-2, -1))
 
     # first (zero-order) scattering coeff. is just low-pass'd input
@@ -205,7 +180,7 @@ def scattering_coeffs(
         # multiplication should be elementwise(BC1HW x 11LHW => BCLHW)
         # output is sorted by j, each element corresp. with j-scale
         x1l = [
-            complex_modulus(
+            nonlinearity(
                 subsample_field(x, adicity, j)[:, :, None, ...]
                 * periodize_filter(psi1[j, ...], adicity, j)[None, None, ...]
             )
@@ -223,7 +198,7 @@ def scattering_coeffs(
             # output has shape : BCLMHW
             x2l = [
                 scatter_coeff(
-                    complex_modulus(
+                    nonlinearity(
                         subsample_field(x1, adicity, j2)[:, :, :, None, ...]
                         * periodize_filter(psi2[j2, ...], adicity, j1 + j2)[
                             None, None, None, ...
@@ -238,7 +213,7 @@ def scattering_coeffs(
     else:
         s1, s2 = [], []
         for j1 in range(n_scales):
-            field = complex_modulus(
+            field = nonlinearity(
                 subsample_field(x, adicity, j1)[:, :, None, ...]
                 * periodize_filter(psi1[j1, ...], adicity, j1)[None, None, ...]
             )
@@ -247,7 +222,7 @@ def scattering_coeffs(
             for j2 in range(j1 + 1, n_scales):
                 s21.append(
                     scatter_coeff(
-                        complex_modulus(
+                        nonlinearity(
                             subsample_field(field, adicity, j2)[
                                 :, :, :, None, ...
                             ]
@@ -262,18 +237,6 @@ def scattering_coeffs(
         s1 = jnp.stack(s1, axis=2)
         s2 = list(map(Partial(jnp.stack, axis=2), s2))
     return s0, s1, s2
-
-
-def complex_modulus(x: Complex[Array, "..."]) -> Real[Array, "..."]:
-    """complex_modulus Compute modulus of scattering field.
-
-    Args:
-        x (Complex[Array]): input field.
-
-    Returns:
-        Real[Array]
-    """
-    return jnp.fft.fft2(jnp.abs(jnp.fft.ifft2(x)))
 
 
 def subsample_field(
