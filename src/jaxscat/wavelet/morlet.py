@@ -20,8 +20,9 @@ from .gabor import gabor_kernel_2d_real_scikit
 def filter_bank_2d(
     size_h: int,
     size_w: int,
-    n_orientations: int,
     n_scales: int,
+    n_orientations: int,
+    n_phases: int,
     space: str,
     adicity: int = 2,
     sigma_prefactor: float = 0.8,
@@ -30,11 +31,14 @@ def filter_bank_2d(
 ):
     """filter_bank_2d Filter bank of 2D Morlet filters.
 
+    The resulting bank is a 5D tensor (n_scales x n_orientations x n_phases x size_h x size_w).
+
     Args:
         size_h (int): spatial size of filter, height. Specified in pixels.
         size_w (int): Spatial size of filter, width. Specified in pixels.
-        n_orientations (int): Number of orientations in the filter bank.
         n_scales (int): Number of spatial scales in the filter bank.
+        n_orientations (int): Number of orientations in the filter bank.
+        n_phases (int): Number of phases in the filter bank.
         space (str): Output space of filters, one of 'real' or 'fourier'.
         adicity (int, optional): Adicity of the spatial scale separation. Defaults to 2.
         sigma_prefactor (float, optional): sigma = (sigma_prefactor) * adicity**scale. Defaults to 0.8.
@@ -55,6 +59,10 @@ def filter_bank_2d(
         / n_orientations
         for ell in range(n_orientations)
     ]
+    phases = [
+        math.floor(n_phases - n_phases / 2 - ell) * math.pi / n_phases
+        for ell in range(n_phases)
+    ]
     if space == "fourier":
         kernel_fun = morlet_kernel_2d_fourier
     elif space == "real":
@@ -65,13 +73,20 @@ def filter_bank_2d(
         [
             jnp.stack(
                 [
-                    kernel_fun(
-                        size_h,
-                        size_w,
-                        sigma,
-                        freq,
-                        theta,
-                        gamma_prefactor / n_orientations,
+                    jnp.stack(
+                        [
+                            kernel_fun(
+                                size_h,
+                                size_w,
+                                sigma,
+                                freq,
+                                theta,
+                                gamma_prefactor / n_orientations,
+                                phase,
+                            )
+                            for phase in phases
+                        ],
+                        axis=0,
                     )
                     for theta in thetas
                 ],
