@@ -1,6 +1,6 @@
 """Sphinx configuration."""
 
-project = "jaxscat"
+project = "calcite"
 author = "Matt Black"
 copyright = "2024, Matt Black"
 

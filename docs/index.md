@@ -19,5 +19,5 @@ reference
 notebooks/example.ipynb
 contributing
 License <license>
-Changelog <https://github.com/matt-black/jaxscat/releases>
+Changelog <https://github.com/matt-black/calcite/releases>
 ```

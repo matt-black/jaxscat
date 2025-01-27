@@ -20,11 +20,11 @@ from jaxtyping import Real
 
 
 def apply_filter_bank(
-    x: Num[Array, "b c h w"],
-    psi: Complex[Array, "l kh kw"],
+    x: Num[Array, "c h w"],
+    psi: Complex[Array, "l p kh kw"],
     mode: str = "same",
     method: str = "fft",
-) -> Complex[Array, "b c l h w"]:
+) -> Complex[Array, "c l p h w"]:
     """apply_filter_bank Apply a bank of filters to all channels & batches in input.
 
     Args:
@@ -34,7 +34,7 @@ def apply_filter_bank(
         method (str, optional): method for computing convolution. Defaults to 'fft'.
 
     Returns:
-        Complex[Array]: 5D tensor of fitler responses, BxCxNxHxW
+        Complex[Array]: 5D tensor of filter responses, BxCxNxHxW
     """
     return jnp.stack(
         [
@@ -58,7 +58,7 @@ def complex_modulus(x: Complex[Array, "..."]) -> Real[Array, "..."]:
 
 
 def batched_conv2d(
-    in1: Num[Array, "..."],
+    in1: Num[Array, "c h w"],
     in2: Num[Array, "kh kw"],
     mode: str = "same",
     method: str = "fft",
@@ -82,29 +82,22 @@ def batched_conv2d(
         in1 = in1.reshape(in1.shape[0], -1, in1.shape[-2], in1.shape[-1])
     if method == "fft":
         fun = jax.vmap(
-            jax.vmap(
-                Partial(jsp.signal.fftconvolve, mode=mode, axes=(0, 1)),
-                (0, None),
-            ),
-            (0, None),
+            Partial(jsp.signal.fftconvolve, mode=mode, axes=0), (0, None)
         )
     elif method == "direct":
-        fun = jax.vmap(
-            jax.vmap(Partial(jsp.signal.convolve2d, mode=mode), (0, None)),
-            (0, None),
-        )
+        fun = jax.vmap(Partial(jsp.signal.convolve2d, mode=mode), (0, None))
     else:
         raise ValueError("invalid convolution method")
     return fun(in1, in2).reshape(in1_shape)
 
 
 def scattering_coeffs(
-    x: Real[Array, "b c h w"],
+    x: Real[Array, "c h w"],
     adicity: int,
     n_scales: int,
     phi: Complex[Array, "h w"],
-    psi1: Complex[Array, "{n_scales} l kh kw"],
-    psi2: Complex[Array, "{n_scales} l kh kw"] | None = None,
+    psi1: Complex[Array, "{n_scales} l p kh kw"],
+    psi2: Complex[Array, "{n_scales} l p kh kw"] | None = None,
     reduction: str = "local",
     conv_method: str = "fft",
     nonlinearity: Callable[[Array], Array] = complex_modulus,
@@ -238,6 +231,101 @@ def scattering_fields(
             f2 = nonlinearity(
                 apply_filter_bank(
                     f_scale, psi2, mode="same", method=conv_method
+                )
+            )
+            field2s.append(f2)
+        if len(field2s):
+            field2.append(field2s)
+    return field1, field2
+
+
+def learned_scattering_fields(
+    x: Real[Array, "b c h w"],
+    adicity: int,
+    n_scales: int,
+    proj_kernel1: List[Num[Array, "o i 1 1"]],
+    proj_kernel2: List[List[Num[Array, "o i 1 1"]]],
+    psi1: Complex[Array, "l h w"],
+    psi2: Complex[Array, "l h w"] | None = None,
+    conv_method: str = "fft",
+    nonlinearity: Callable[[Array], Array] = complex_modulus,
+) -> Tuple[
+    List[Complex[Array, "b c l 1 h w"]],
+    List[List[Complex[Array, "b c l m h w"]]],
+]:
+    """learned_scattering_fields TODO.
+
+    DONT USE
+    """
+    psi2 = psi1 if psi2 is None else psi2
+    field1, field2 = [], []
+    for j1 in range(n_scales):
+        # downscale appropriately
+        new_shape = [
+            x.shape[-2] // (j1 * adicity),
+            x.shape[-1] // (j1 * adicity),
+        ]
+        x_scale = (
+            x
+            if j1 == 0
+            else jim.resize(
+                x,
+                list(x.shape[:-2]) + new_shape,
+                method=jim.ResizeMethod.LINEAR,
+            )
+        )
+        f1 = nonlinearity(
+            jax.lax.conv_general_dilated(
+                jnp.reshape(
+                    apply_filter_bank(x_scale, psi1, "same", conv_method),
+                    [
+                        x.shape[0],
+                        x.shape[1] * psi1.shape[0],
+                        x.shape[2],
+                        x.shape[3],
+                    ],
+                ),
+                proj_kernel1[j1],
+                window_strides=(1, 1),
+                dimension_numbers=("NCHW", "OIHW", "NCHW"),
+            )
+        )
+        field2s = []
+        for j2 in range(j1, n_scales):
+            new_shape = [
+                x.shape[-2] // (j2 * adicity),
+                x.shape[-1] // (j2 * adicity),
+            ]
+            f_scale = jim.resize(
+                f1,
+                list(x.shape[:-2]) + new_shape,
+                method=jim.ResizeMethod.LINEAR,
+            )
+            # reshape to collapse channels and L-filter responses so that input
+            # to `apply_filter_bank` is 4D tensor
+            shp_allchan = [
+                f_scale.shape[0],
+                f_scale.shape[1] * f_scale.shape[2],
+                f_scale.shape[3],
+                f_scale.shape[4],
+            ]
+            shp_jll = [
+                f_scale.shape[0],
+                shp_allchan[1] * psi2.shape[0],
+                f_scale.shape[3],
+                f_scale.shape[4],
+            ]
+            f_scale = jnp.reshape(f_scale, shp_allchan)
+            # compute 2nd layer of transform
+            f2 = nonlinearity(
+                jax.lax.conv_general_dilated(
+                    jnp.reshape(
+                        apply_filter_bank(f_scale, psi2, "same", conv_method),
+                        shp_jll,
+                    ),
+                    proj_kernel2[j1][j2 - j1],
+                    window_strides=(1, 1),
+                    dimension_numbers=("NCHW", "OIHW", "NCHW"),
                 )
             )
             field2s.append(f2)

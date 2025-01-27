@@ -1,8 +1,8 @@
 # Reference
 
-## jaxscat
+## calcite
 
 ```{eval-rst}
-.. automodule:: jaxscat
+.. automodule:: calcite
    :members:
 ```

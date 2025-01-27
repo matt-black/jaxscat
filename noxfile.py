@@ -1,4 +1,7 @@
-"""Nox sessions."""
+"""Nox sessions.
+
+nox is for testing.
+"""
 
 import os
 import shlex
@@ -23,7 +26,7 @@ except ImportError:
     raise SystemExit(dedent(message)) from None
 
 
-package = "jaxscat"
+package = "calcite"
 python_versions = ["3.12"]
 nox.needs_version = ">= 2022.1.7"
 nox.options.sessions = (
@@ -96,7 +99,9 @@ def activate_virtualenv_in_precommit_hooks(session: Session) -> None:
         text = hook.read_text()
 
         if not any(
-            Path("A") == Path("a") and bindir.lower() in text.lower() or bindir in text
+            Path("A") == Path("a")
+            and bindir.lower() in text.lower()
+            or bindir in text
             for bindir in bindirs
         ):
             continue
@@ -146,7 +151,9 @@ def mypy(session: Session) -> None:
     session.install("mypy", "pytest")
     session.run("mypy", *args)
     if not session.posargs:
-        session.run("mypy", f"--python-executable={sys.executable}", "noxfile.py")
+        session.run(
+            "mypy", f"--python-executable={sys.executable}", "noxfile.py"
+        )
 
 
 @session(python=python_versions)
@@ -155,7 +162,9 @@ def tests(session: Session) -> None:
     session.install(".")
     session.install("coverage[toml]", "pytest", "pygments")
     try:
-        session.run("coverage", "run", "--parallel", "-m", "pytest", *session.posargs)
+        session.run(
+            "coverage", "run", "--parallel", "-m", "pytest", *session.posargs
+        )
     finally:
         if session.interactive:
             session.notify("coverage", posargs=[])
@@ -206,7 +215,12 @@ def docs_build(session: Session) -> None:
 
     session.install(".")
     session.install(
-        "sphinx", "furo", "myst-parser", "myst-nb", "sphinx_copybutton", "sphinx_design"
+        "sphinx",
+        "furo",
+        "myst-parser",
+        "myst-nb",
+        "sphinx_copybutton",
+        "sphinx_design",
     )
 
     build_dir = Path("docs", "_build")

@@ -1,19 +1,19 @@
 [tool.poetry]
-name = "jaxscat"
+name = "calcite"
 version = "0.1.0"
 description = "Scattering transform"
 authors = ["Matt Black <mb46@princeton.edu>"]
 license = "GPLv3"
 readme = "README.md"
-homepage = "https://github.com/matt-black/jaxscat"
-repository = "https://github.com/matt-black/jaxscat"
-documentation = "https://jaxscat.readthedocs.io"
+homepage = "https://github.com/matt-black/calcite"
+repository = "https://github.com/matt-black/calcite"
+documentation = "https://calcite.readthedocs.io"
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
 ]
 
 [tool.poetry.urls]
-Changelog = "https://github.com/matt-black/jaxscat/releases"
+Changelog = "https://github.com/matt-black/calcite/releases"
 
 [tool.poetry.dependencies]
 python = ">=3.12,<4.0"
@@ -61,7 +61,7 @@ tests = ["tests", "*/tests"]
 
 [tool.coverage.run]
 branch = true
-source = ["jaxscat", "tests"]
+source = ["calcite", "tests"]
 
 [tool.coverage.report]
 show_missing = true
