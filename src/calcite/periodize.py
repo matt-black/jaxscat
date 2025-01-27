@@ -74,7 +74,7 @@ def _periodize1d(
     mask = mask.at[start_x : start_x + len_x].set(0)
     return jax.lax.conv_general_dilated(
         jnp.expand_dims(jnp.multiply(x, mask), (0, 1)),
-        jnp.expand_dims(jnp.ones(k), (0, 1)),
+        jnp.expand_dims(jnp.ones(k, dtype=x.dtype), (0, 1)),
         window_strides=1,
         padding="valid",
         rhs_dilation=(sze // k),
@@ -97,7 +97,7 @@ def _periodize2d(
     #
     return jax.lax.conv_general_dilated(
         jnp.expand_dims(jnp.multiply(x, mask), (0, 1)),
-        jnp.expand_dims(jnp.ones((k, k)), (0, 1)),
+        jnp.expand_dims(jnp.ones((k, k), dtype=x.dtype), (0, 1)),
         window_strides=(1, 1),
         padding="valid",
         rhs_dilation=(hgt // k, wid // k),
@@ -122,7 +122,7 @@ def _periodize3d(
 
     return jax.lax.conv_general_dilated(
         jnp.expand_dims(jnp.multiply(x, mask), (0, 1)),
-        jnp.expand_dims(jnp.ones((k, k, k)), (0, 1)),
+        jnp.expand_dims(jnp.ones((k, k, k), dtype=x.dtype), (0, 1)),
         window_strides=(1, 1, 1),
         padding="valid",
         rhs_dilation=(dep // k, hgt // k, wid // k),

@@ -49,9 +49,7 @@ def radial_coordinate_grid_2d(size: int) -> Float[Array, "{size} {size}"]:
     Returns:
         Float[Array]: 2d grid of radial coordinate values
     """
-    if not size % 2 > 0:
-        raise ValueError("size must be odd")
-    cent = size // 2
+    cent = size / 2
     x, y = jnp.meshgrid(jnp.arange(size), jnp.arange(size))
     return jnp.sqrt(jnp.power(x - cent, 2) + jnp.power(y - cent, 2))
 
@@ -67,9 +65,7 @@ def angular_coordinate_grid_2d(size: int) -> Float[Array, "{size} {size}"]:
     Returns:
         Float[Array]: 2d square grid of angular values at each coordinate
     """
-    if not size % 2 > 0:
-        raise ValueError("size must be odd")
-    cent = size // 2
+    cent = size / 2
     x, y = jnp.meshgrid(jnp.arange(size), jnp.arange(size))
     return jnp.arctan2(y - cent, x - cent)
 

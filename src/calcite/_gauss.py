@@ -208,10 +208,7 @@ def gaussian_2d(
     Returns:
         Float[Array]: grid of values from 2d gaussian
     """
-    if not size % 2 > 0:
-        raise ValueError("size must be odd")
-
-    cent = size // 2
+    cent = size / 2
     x, y = jnp.meshgrid(jnp.arange(size), jnp.arange(size), indexing="xy")
     gx = _gauss_prefactor(sigma_x, 1) * jnp.exp(
         -jnp.square(x - cent) / (2 * jnp.square(sigma_x))
