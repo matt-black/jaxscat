@@ -11,6 +11,7 @@ from typing import Tuple
 import jax.numpy as jnp
 from jaxtyping import Array
 from jaxtyping import Complex
+from jaxtyping import Num
 from jaxtyping import Real
 
 from .gabor import gabor_kernel_2d_real
@@ -28,7 +29,7 @@ def filter_bank_2d(
     sigma_prefactor: float = 0.8,
     freq_prefactor: float = 3 * math.pi / 4,
     gamma_prefactor: float = 4.0,
-):
+) -> Num[Array, "{n_scales} {n_orientations} {n_phases} {size_h} {size_w}"]:
     """filter_bank_2d Filter bank of 2D Morlet filters.
 
     The resulting bank is a 5D tensor (n_scales x n_orientations x n_phases x size_h x size_w).

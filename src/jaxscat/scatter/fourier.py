@@ -16,8 +16,8 @@ from jaxtyping import Complex
 from jaxtyping import Num
 from jaxtyping import Real
 
+from ..periodize import periodize_filter
 from .util import apply_filter_bank
-from .util import periodize_filter
 from .util import subsample_field
 
 
